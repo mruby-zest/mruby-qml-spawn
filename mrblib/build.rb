@@ -122,7 +122,7 @@ class QmlIrToRuby
         #puts "##installing database..."
         install_database
         #puts "##installing initializer..."
-        install_initialize
+        install_initialize(supe)
         #puts "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
         #puts "Done with #{@class}"
         #puts "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -277,17 +277,21 @@ class QmlIrToRuby
     end
 
     #Create class initialize method for the form Class.new(database)
-    def install_initialize
+    def install_initialize(sup)
+        superargs = "()"
+        if(sup[0..4] == "Qml::")
+            superargs = "(database, ui_path)"
+        end
         eval_str =
         "class Qml::#{@class}
              def initialize(database, ui_path=\"/ui/\")
-             super
+             super#{superargs}
             @db         ||= database
             @ui_path      = ui_path
             @properties ||= Hash.new
              " + @setup + "#t1 = Time.new\n" + @init + "\n#puts \"Init #{@class} took \#{1000*(Time.new-t1)} ms\"\nend\nend"
         #code_format_print eval_str
-        eval(eval_str, nil, "anonymous", 0);
+        eval(eval_str, nil, "anonymous-#{@class}", 0);
     end
 
     #Create accessors for properties, database, and path info
@@ -486,7 +490,7 @@ def doTest
 
     assert_nil(te.te4.p1,   "Proxy Objects are provided to children")
 
-    puts te.to_s
+    #puts te.to_s
     db.force_update
     test_summary
 

@@ -33,7 +33,6 @@ def loadIR
         end
         qml_ir[cname] = q_ir
     end
-    #puts "loadIR with diff = #{different_file}"
     if(different_file)
         qml_ir
     else
