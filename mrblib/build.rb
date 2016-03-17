@@ -314,6 +314,7 @@ class QmlIrToRuby
         code.gsub!("\#{","\\\#{")
         @init += "
         #{@context[cls]}.instance_eval(\"def #{name}(#{args});#{code};end\", #{meth.file.inspect}, #{meth.line})\n"
+        #@init += "print '%'\n"
     end
 
     #Create id->object mapper
@@ -401,6 +402,7 @@ end
 #Test Code
 $test_counter = 0
 $test_err = 0
+$test_quiet = false
 def assert_eq(a,b,str)
     $test_counter += 1
     err = a!=b
@@ -409,7 +411,7 @@ def assert_eq(a,b,str)
         puts "# Expected #{a.inspect}, but observed #{b.inspect} instead"
         $test_err += 1
     else
-        puts "ok #{$test_counter} - #{str}..."
+        puts "ok #{$test_counter} - #{str}..." unless $test_quiet
     end
     err
 end
@@ -422,7 +424,7 @@ def assert_not_eq(a,b,str)
         puts "# Expected not #{a.inspect}, but observed #{b.inspect} instead"
         $test_err += 1
     else
-        puts "ok #{$test_counter} - #{str}..."
+        puts "ok #{$test_counter} - #{str}..." unless $test_quiet
     end
     err
 end
@@ -435,7 +437,7 @@ def assert_not_nil(a,str)
         puts "# Observed unexpected nil instead"
         $test_err += 1
     else
-        puts "ok #{$test_counter} - #{str}..."
+        puts "ok #{$test_counter} - #{str}..." unless $test_quiet
     end
     err
 end
@@ -448,36 +450,49 @@ def assert_nil(a,str)
         puts "# Expected nil, but observed #{a} instead"
         $test_err += 1
     else
-        puts "ok #{$test_counter} - #{str}..."
+        puts "ok #{$test_counter} - #{str}..." unless $test_quiet
     end
     err
 end
 
 def test_summary
-    puts "# #{$test_err} test(s) failed out of #{$test_counter} (currently passing #{100.0-$test_err*100.0/$test_counter}% tests)"
+    puts "# #{$test_err} test(s) failed out of #{$test_counter} (currently passing #{100.0-$test_err*100.0/$test_counter}% tests)" unless $test_quiet
 end
 
 def doTest
-    db  = PropertyDatabase.new
     QmlIrToRuby.new(loadIR)
     puts "done..."
 
+    db  = PropertyDatabase.new
     t1 = Time.new
     tb = Qml::TestBase.new(db)
     t2 = Time.new
-    puts "time to create is #{1000*(t2-t1)}ms"
+
+    db.force_update
+
+    #puts db.to_s
+    puts "time to create is #{1000000*(t2-t1)}us"
     assert_not_nil(tb,    "Allocated TestBase is non-nil")
     assert_not_nil(tb.tb, "A reference to self is available based upon the id")
     assert_nil(tb.p1,     "A property is initialized to the appropriate value")
     assert_nil(tb.p3,     "A chained property is initialized to the appropriate value")
     assert_nil(tb.p2,     "A chained property is initialized to the appropriate value")
 
+    tb.p1 = 1
+    #puts db.to_s
+    assert_not_nil(tb.p1, "A property is updated to the appropriate value")
+    assert_not_nil(tb.p2, "A chained property is updated to the appropriate value")
+    assert_not_nil(tb.p3, "A chained property is updated to the appropriate value")
+    #exit
+    #puts db.to_s
+
     t1 = Time.new
+    #te = nil
     #(0..1000).each do |x|
     te = Qml::TestExt.new(db)
     #end
     t2 = Time.new
-    puts "time to create is #{1000*(t2-t1)}ms"
+    puts "time to create is #{1000000*(t2-t1)}us"
     assert_not_nil(te,    "Extended classes are non-nil")
     assert_not_eq(te.te1, te.te2, "Children are different instances 1/2")
     assert_not_eq(te.te2, te.te3, "Children are different instances 2/2")
@@ -494,11 +509,11 @@ def doTest
     db.force_update
     test_summary
 
+
     t1 = Time.new
     mw = Qml::MainWindow.new(db)
     t2 = Time.new
     puts "time to create is #{1000*(t2-t1)}ms"
-
     mw
 end
 

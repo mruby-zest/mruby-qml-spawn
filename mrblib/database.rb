@@ -25,8 +25,31 @@ class Callable
         @eval_value = nil
     end
     def eval_value=(x)
+        if(x == "nil")
+            return
+        elsif(x == "true")
+            @value = true
+            return
+        elsif(x == "false")
+            @value = false
+            return
+        elsif(x == "[]")
+            @value = []
+            return
+        elsif(x == "0")
+            @value = 0
+            return
+        elsif(x == "1.0")
+            @value = 1.0
+            return
+        elsif(x == "\"\"")
+            @value = ""
+            return
+        end
         @value = nil
         @eval_value = x
+        #print '.'
+        #puts x[0..8]
         self.instance_eval("def get_value;#{@eval_value};end")
     end
     def call
@@ -48,7 +71,6 @@ class Callable
 
     def registerExternal(x)
     end
-
     def method_missing(sym, *args, &block)
         #puts "Callable Method Missing on #{sym}"
         #puts "method missing"
@@ -116,9 +138,9 @@ class Property
     attr_accessor :onWrite
 
     def to_s()
-        out = "#<Property:#{id}=#{@stale?"?":value.inspect}"
+        out = "#<Property:#{id}=#{@stale?"?":"XX"}"
         if(!@depends.empty?)
-            out = out+"dep=#{@depends}"
+            out = out+"dep=#{@depends.each{|x|x.id}.join}"
         else
             out = out
         end
@@ -188,12 +210,12 @@ class PropertyDatabase
             puts prop.class
             puts prop
         end
-        #puts "Loading #{prop.id} at transaction #{@transaction_nest}"
+        #puts "[DEBUG] Loading #{prop.id} at transaction #{@transaction_nest}"
         if(@transaction_nest != 0)
             @read_list << prop
         end
         if(!prop.selfDifferent && !prop.stale)
-            #puts "    quick return #{prop.value}"
+            #puts "[DEBUG]    quick return #{prop.value}"
             return prop.value
         end
         plausably_different = prop.selfDifferent
@@ -207,7 +229,7 @@ class PropertyDatabase
             prop.oldValue = prop.value
 
             #puts "Original Dep(#{prop.identifier}) = #{prop.depends}"
-            #puts "Loading..."
+            #puts "[DEBUG] Loading..."
             start_load_transaction()
             prop.value = prop.callback.call()
             read_list = end_load_transaction()
@@ -231,8 +253,8 @@ class PropertyDatabase
         else
             prop.stale = false
         end
-        #puts "#{prop.identifier}[#{plausably_different}] = #{prop.value}"
-        #puts "    slow return #{prop.value}"
+        #puts "[DEBUG]#{prop.identifier}[#{plausably_different}] = #{prop.value}"
+        #puts "[DEBUG]    slow return #{prop.value}"
         prop.value
     end
 
@@ -277,6 +299,7 @@ class PropertyDatabase
         p.callback = c
         p.value = value
         p.stale = true
+        p.different = true
         #transitive_closure
         make_rdepends
         propigate_stale p
