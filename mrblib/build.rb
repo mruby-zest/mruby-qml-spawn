@@ -522,7 +522,6 @@ def doFastLoad
     db  = PropertyDatabase.new
     lir = loadIR
     if(lir)
-        #puts "doing load..."
         t2 = Time.new
         QmlIrToRuby.new(lir)
         t3 = Time.new
@@ -533,11 +532,14 @@ def doFastLoad
         #puts db
         return mw
     else
-        #puts "skipping load..."
         return nil
     end
     #TODO make this rescue only capture missing file issues
-rescue
+rescue Exception=>e
+    puts e 
+    e.backtrace.each do |ln|
+        puts ln
+    end
     nil
 end
 
@@ -577,5 +579,11 @@ def createInstance(name, parent, pdb)
         end
 
         child
+    end
+end
+
+module GL
+    class PUGL
+        attr_accessor :w, :h
     end
 end

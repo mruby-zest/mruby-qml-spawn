@@ -3,11 +3,19 @@ $damaged_classes = []
 
 def loadIR
     l = Parser.new
-    qml_data = [Dir.glob("../mruby-zest/mrblib/*.qml"),
-                Dir.glob("../mruby-zest/qml/*.qml"),
-                Dir.glob("../mruby-zest/test/*.qml"),
-                Dir.glob("../mruby-qml-spawn/test/*.qml"),
-                Dir.glob("../mruby-zest/example/*.qml")].flatten
+    qml_data = [
+        Dir.glob("../mruby-zest/mrblib/*.qml"),
+        Dir.glob("../mruby-zest/qml/*.qml"),
+        Dir.glob("../mruby-zest/test/*.qml"),
+        Dir.glob("../mruby-qml-spawn/test/*.qml"),
+        Dir.glob("../mruby-zest/example/*.qml"),
+        Dir.glob("src/mruby-zest/mrblib/*.qml"),
+        Dir.glob("src/mruby-zest/qml/*.qml"),
+        Dir.glob("src/mruby-zest/test/*.qml"),
+        Dir.glob("src/mruby-qml-spawn/test/*.qml"),
+        Dir.glob("src/mruby-zest/example/*.qml"),
+        Dir.glob("qml/*.qml")
+    ].flatten
     qml_ir   = Hash.new
     different_file = false
     qml_data.each do |q|
@@ -19,7 +27,6 @@ def loadIR
             q_ir = GlobalIRCache[cname+hash];
         else
             prog = l.load_qml_from_file(q)
-            #puts prog
             root_node = nil
             prog.each do |x|
                 if(x.is_a? TInst)

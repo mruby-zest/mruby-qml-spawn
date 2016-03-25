@@ -25,32 +25,12 @@ class Callable
         @eval_value = nil
     end
     def eval_value=(x)
-        if(x == "nil")
-            return
-        elsif(x == "true")
-            @value = true
-            return
-        elsif(x == "false")
-            @value = false
-            return
-        elsif(x == "[]")
-            @value = []
-            return
-        elsif(x == "0")
-            @value = 0
-            return
-        elsif(x == "1.0")
-            @value = 1.0
-            return
-        elsif(x == "\"\"")
-            @value = ""
-            return
-        end
         @value = nil
         @eval_value = x
         #print '.'
         #puts x[0..8]
         self.instance_eval("def get_value;#{@eval_value};end")
+        nil
     end
     def call
         result = nil
@@ -74,7 +54,12 @@ class Callable
     def method_missing(sym, *args, &block)
         #puts "Callable Method Missing on #{sym}"
         #puts "method missing"
-        @ctx[sym.to_s]
+        if(@ctx.include? sym.to_s)
+            @ctx[sym.to_s]
+        else
+            puts "unknown context method..."
+            puts @ctx
+        end
     end
 end
 
@@ -358,6 +343,7 @@ class PropertyDatabase
             pp cb
             throw :error
         end
+        nil
         #puts "connection time is #{1000*(Time.new-t1)}ms"
     end
 
