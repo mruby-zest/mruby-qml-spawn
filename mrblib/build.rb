@@ -48,6 +48,10 @@ def code_format_print(code)
         elsif(ln.match(/do$/))
             indent += 4
         end
+
+        if(ln.match(/end$/) && !ln.match(/^end/))
+            indent -= 4
+        end
     end
 end
 
@@ -104,6 +108,7 @@ class QmlIrToRuby
         #puts "========================================================================="
         if(!get_global_const(supe))
             if(!@ir.include? supe)
+                puts supe
                 raise Exception.new("unknown base class....")
             else
                 if(!get_qml_const(supe))
@@ -156,6 +161,7 @@ class QmlIrToRuby
                 if(@ir.include? inst[1])
                     solve_ir(inst[1])
                 else
+                    puts inst[1]
                     raise "unknown base class"
                 end
             end
@@ -335,12 +341,8 @@ class QmlIrToRuby
                 if(kk.match anon_test)
                     next
                 end
-                @init += "def #{kk}=(k)
-                @#{kk}=k
-                end
-                def #{kk}
-                @#{kk}
-                end\n"
+                @init += "def #{kk}=(k);@#{kk}=k;end\n"
+                @init += "def #{kk};    @#{kk};  end\n"
             end
             @init += "end\n"
         end
