@@ -28,7 +28,6 @@ class Callable
         @value = nil
         @eval_value = x
         #print '.'
-        #puts x[0..8]
         self.instance_eval("def get_value;#{@eval_value};end")
         nil
     end

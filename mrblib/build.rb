@@ -24,6 +24,18 @@ module Qml
             cls.send(k+"=", v)
         end
     end
+
+    def self.add_child(parent, child)
+        children = parent.children
+        children << child
+        parent.children = children
+    end
+
+    def self.prop_add(cls, field)
+        prop = Property.new(field)
+        cls.properties[field] = prop
+        cls.db.add_property prop
+    end
 end
 
 def code_format_print(code)
@@ -191,9 +203,7 @@ class QmlIrToRuby
             add_method(inst, obj)
         when SP
             (child, parent) = inst[1..2]
-            @init += "children = #{@context[parent]}.children
-            children << #{@context[child]}
-            #{@context[parent]}.children = children\n"
+            @init += "Qml::add_child(#{@context[parent]}, #{@context[child]})\n"
         when CA
             obj = inst[1]
             add_attr_connection(inst, obj)
@@ -276,7 +286,20 @@ class QmlIrToRuby
         val.gsub!("\#{","\\\#{")
 
         if(!field.match(/^on/))
-            @init += "@db.connect_property(#{objs}properties[#{field.inspect}], #{val}, context)\n"
+            #Check for simple value cases
+            if(val == "\"nil\"" && cls == 0)
+                @init += "self.#{field} = nil\n"
+            elsif(val == "\"[]\"" && cls == 0)
+                @init += "self.#{field} = []\n"
+            elsif(val == "\"\\\"\\\"\"" && cls == 0)
+                @init += "self.#{field} = \"\"\n"
+            elsif(val == "\"1.0\"" && cls == 0)
+                @init += "self.#{field} = 1.0\n"
+            elsif(val == "\"false\"" && cls == 0)
+                @init += "self.#{field} = false\n"
+            else
+                @init += "@db.connect_property(#{objs}properties[#{field.inspect}], #{val}, context)\n"
+            end
         else
             field    = field[2..-1]
             field[0] = field[0].downcase
@@ -300,7 +323,7 @@ class QmlIrToRuby
             @db         ||= database
             @ui_path      = ui_path
             @properties ||= Hash.new
-             " + @setup + "#t1 = Time.new\n" + @init + "\n#puts \"Init #{@class} took \#{1000*(Time.new-t1)} ms\"\nend\nend"
+             " + "#t1 = Time.new\n" + @setup + @init + "\n#puts \"Init #{@class} took \#{1000*(Time.new-t1)} ms\"\nend\nend"
         #code_format_print eval_str
         eval(eval_str, nil, "anonymous-#{@class}", 0);
     end
@@ -343,15 +366,24 @@ class QmlIrToRuby
                 next
             end
 
-            @init += "#{v}.instance_eval do\n"
+            num_fields = 0
             ctx.each do |kk,vv|
-                if(kk.match anon_test)
-                    next
+                if(!(kk.match anon_test))
+                    num_fields += 1
                 end
-                @init += "def #{kk}=(k);@#{kk}=k;end\n"
-                @init += "def #{kk};    @#{kk};  end\n"
             end
-            @init += "end\n"
+
+            if(num_fields != 0)
+                @init += "#{v}.instance_eval do\n"
+                ctx.each do |kk,vv|
+                    if(kk.match anon_test)
+                        next
+                    end
+                    @init += "def #{kk}=(k);@#{kk}=k;end\n"
+                    @init += "def #{kk};    @#{kk};  end\n"
+                end
+                @init += "end\n"
+            end
         end
 
         ctx.each do |k,v|
@@ -369,11 +401,7 @@ class QmlIrToRuby
 
         name = attr[2]
 
-        @init += "
-        prop = Property.new(#{name.inspect})
-        @properties[#{name.inspect}] = prop
-        @db.add_property prop
-        "
+        @init += "Qml::prop_add(self, #{name.inspect})\n"
     end
 
 
