@@ -19,6 +19,11 @@ CachedCtime   = nil
 $total_objs = 0
 
 module Qml
+    def self.context_apply(ctx, cls)
+        ctx.each do |k,v|
+            cls.send(k+"=", v)
+        end
+    end
 end
 
 def code_format_print(code)
@@ -330,7 +335,9 @@ class QmlIrToRuby
         @init += "\ncontext = Hash.new\n"
         ctx.each do |k,v|
             eval("class Qml::#{@class}\n def #{k};#{v};end\n end")
-            @init += "context[#{k.inspect}] = #{v}\n"
+            if(!k.inspect.match(/anonymous/))
+                @init += "context[#{k.inspect}] = #{v}\n"
+            end
 
             if(v == "self")
                 next
@@ -351,11 +358,7 @@ class QmlIrToRuby
             if(v == "self")
                next
             end
-            ctx.each do |kk,vv|
-                if(!kk.match anon_test)
-                    @init += "#{k}.#{kk} = #{vv}\n"
-                end
-            end
+            @init += "Qml::context_apply(context, @#{k})\n"
         end
     end
 
