@@ -26,6 +26,7 @@ module Qml
     end
 
     def self.add_child(parent, child)
+        child.parent = parent
         children = parent.children
         children << child
         parent.children = children
