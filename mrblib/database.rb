@@ -327,6 +327,7 @@ class PropertyDatabase
             puts p.class
             puts p
             #pp p
+            raise Exception.new()
         end
         if(cb.is_a? String)
             if(cb[0] == "{")
@@ -340,7 +341,7 @@ class PropertyDatabase
             puts "I don't understand this connection..."
             puts cb.class
             pp cb
-            throw :error
+            raise Exception.new
         end
         nil
         #puts "connection time is #{1000*(Time.new-t1)}ms"
@@ -348,7 +349,7 @@ class PropertyDatabase
 
     def connect_watcher(p, cb, context)
         if(!(p.is_a? Property))
-            puts "Invalid property(CP):"
+            puts "Invalid property(CW):"
             puts p.class
             puts p
             #pp p
@@ -364,7 +365,7 @@ class PropertyDatabase
             puts "I don't understand this connection..."
             puts cb.class
             puts cb
-            throw :error
+            raise Exception.new
         end
     end
 
