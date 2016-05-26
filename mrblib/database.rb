@@ -425,4 +425,8 @@ class PropertyDatabase
     def add_property(prop)
         @plist << prop
     end
+
+    def remove_properties(del_list)
+        @plist = @plist.delete_if {|x| del_list.include? x}
+    end
 end
