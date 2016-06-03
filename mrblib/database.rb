@@ -176,13 +176,22 @@ class PropertyDatabase
         end
     end
 
+    def try_patch_rdep(prop, ndep)
+        if(prop.depends.empty? && ndep.length == 1 && !@stale_rdep_graph)
+            ndep[0].rdepends << prop
+        else
+            @stale_rdep_graph = true
+        end
+
+    end
+
     def update_dependency(prop, ndep)
         #puts("updating dep graph to #{ndep}")
         if(ndep.length == 0)
             prop.literal = true
         end
         if(ndep != prop.depends)
-            @stale_rdep_graph = true
+            try_patch_rdep(prop, ndep)
         end
         prop.depends = ndep
     end
@@ -427,6 +436,10 @@ class PropertyDatabase
     end
 
     def remove_properties(del_list)
-        @plist = @plist.delete_if {|x| del_list.include? x}
+        del_set = Set.new(del_list)
+        p_set   = Set.new(@plist)
+        puts "Delete   list size is #{del_list.length}"
+        puts "Property list size is #{@plist.length}"
+        @plist = (p_set-del_set).to_a
     end
 end
