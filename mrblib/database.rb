@@ -153,7 +153,7 @@ class PropertyDatabase
         @transaction_nest = 0
         @read_list = []
         @old_read_list = []
-        @plist = Set.new
+        @plist = []
         @stale_rdep_graph = true
     end
 
@@ -435,10 +435,17 @@ class PropertyDatabase
     end
 
     def remove_properties(del_list)
-        del_set = del_list
-        del_set = Set.new(del_list) if del_set.class != Set
-        puts "Delete   list size is #{del_list.length}"
-        puts "Property list size is #{@plist.length}"
-        @plist = @plist-del_set
+        #puts "Delete   list size is #{del_list.length}"
+        #puts "Property list size is #{@plist.length}"
+        old = Time.new
+        del_set = Set.new(del_list)
+        next_list = []
+
+        @plist.each do |x|
+            next_list << x if !(del_set.include? x)
+        end
+        @plist = next_list
+        #puts "output length = #{next_list.length}"
+        puts "[INFO] remove_properties(#{Time.new-old})"
     end
 end
