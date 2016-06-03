@@ -27,7 +27,6 @@ class Callable
     def eval_value=(x)
         @value = nil
         @eval_value = x
-        #print '.'
         self.instance_eval("def get_value;#{@eval_value};end")
         nil
     end
@@ -154,7 +153,7 @@ class PropertyDatabase
         @transaction_nest = 0
         @read_list = []
         @old_read_list = []
-        @plist = []
+        @plist = Set.new
         @stale_rdep_graph = true
     end
 
@@ -436,10 +435,10 @@ class PropertyDatabase
     end
 
     def remove_properties(del_list)
-        del_set = Set.new(del_list)
-        p_set   = Set.new(@plist)
+        del_set = del_list
+        del_set = Set.new(del_list) if del_set.class != Set
         puts "Delete   list size is #{del_list.length}"
         puts "Property list size is #{@plist.length}"
-        @plist = (p_set-del_set).to_a
+        @plist = @plist-del_set
     end
 end
