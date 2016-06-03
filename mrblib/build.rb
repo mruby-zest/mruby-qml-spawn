@@ -298,6 +298,8 @@ class QmlIrToRuby
                 @init += "self.#{field} = 1.0\n"
             elsif(val == "\"false\"" && cls == 0)
                 @init += "self.#{field} = false\n"
+            elsif(["x", "y", "w", "h"].include? field)
+                @init += "@#{field} = #{val}\n"
             else
                 @init += "@db.connect_property(#{objs}properties[#{field.inspect}], #{val}, context)\n"
             end
@@ -325,7 +327,7 @@ class QmlIrToRuby
             @ui_path      = ui_path
             @properties ||= Hash.new
              " + "#t1 = Time.new\n" + @setup + @init + "\n#puts \"Init #{@class} took \#{1000*(Time.new-t1)} ms\"\nend\nend"
-        #code_format_print eval_str
+        #code_format_print eval_str if @class == "HarmonicEditSingle"
         eval(eval_str, nil, "anonymous-#{@class}", 0);
     end
 
@@ -402,7 +404,9 @@ class QmlIrToRuby
 
         name = attr[2]
 
-        @init += "Qml::prop_add(self, #{name.inspect})\n"
+        if(!["x","y","w", "h"].include? name)
+            @init += "Qml::prop_add(self, #{name.inspect})\n"
+        end
     end
 
 
@@ -413,6 +417,17 @@ class QmlIrToRuby
 
     def code_attr(attr)
         name = attr[2]
+        if(["x","y","w", "h"].include?(name))
+            "
+            def #{name}
+                @#{name}
+            end
+
+            def #{name}=(val)
+                @#{name}=val
+            end
+            "
+        else
         "
         def #{name}
             prop = @properties[\"#{name}\"]
@@ -427,6 +442,7 @@ class QmlIrToRuby
             end
         end
         "
+        end
     end
 
 
@@ -560,6 +576,20 @@ def doFastLoad
         QmlIrToRuby.new(lir)
         t3 = Time.new
         mw  = Qml::MainWindow.new(db)
+        #mw = Qml::DemoLayers.new(db)
+        #mw = Qml::ZynLLFO.new(db)
+        #mw = Qml::OverlayTest.new(db)
+        #mw = Qml::VolumeKnob.new(db)
+        #mw = Qml::TestSwap.new(db)
+        #mw = Qml::Envelope.new(db)
+        #mw = Qml::Selector.new(db)
+        #mw = Qml::Knob.new(db)
+        #mw = Qml::TestLfoVis.new(db)
+        #mw = Qml::TestRows.new(db)
+        #mw = Qml::VisFilter.new(db)
+        #mw = Qml::ZynOscil.new(db)
+        #mw = Qml::ZynAddVoiceList.new(db)
+        #mw = Qml::ZynPadHarmonics.new(db)
         t4 = Time.new
         puts "Time for a fast load is #{1000*(t4-t1)}ms load(#{1000*(t2-t1)}) class(#{1000*(t3-t2)}) spawn(#{1000*(t4-t3)})..."
         db.force_update
