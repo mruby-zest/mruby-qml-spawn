@@ -50,11 +50,11 @@ class Callable
     def registerExternal(x)
     end
     def method_missing(sym, *args, &block)
-        #puts "Callable Method Missing on #{sym}"
         #puts "method missing"
         if(@ctx.include? sym.to_s)
             @ctx[sym.to_s]
         else
+            puts "Callable Method Missing on #{sym}"
             puts "unknown context method..."
             puts @ctx
         end
