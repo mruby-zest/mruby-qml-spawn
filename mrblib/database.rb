@@ -176,8 +176,10 @@ class PropertyDatabase
     end
 
     def try_patch_rdep(prop, ndep)
-        if(prop.depends.empty? && ndep.length == 1 && !@stale_rdep_graph)
-            ndep[0].rdepends << prop
+        if(prop.depends.empty? && !@stale_rdep_graph)
+            ndep.each do |dp|
+                dp.rdepends << prop
+            end
         else
             @stale_rdep_graph = true
         end
