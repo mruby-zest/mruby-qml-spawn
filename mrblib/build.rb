@@ -47,6 +47,7 @@ def code_format_print(code)
         if(ln.match(/^end/))
             indent -= 4
         end
+        indent = 0 if indent < 0
         ll = " "
         if(l<10)
             ll = "00#{l} "
@@ -272,34 +273,56 @@ class QmlIrToRuby
         end
     end
 
+    Special = ["x", "y", "w", "h", "tooltip", "parent", "bg", "textColor",
+               "prev", "valueRef", "dragScale", "vertical", "whenValue",
+               "pad", "slidetype", "num", "options", "opt_vals", "selected",
+               "layoutOpts", "children", "layer", "whenClick","textScale",
+               "renderer", "action", "whenSwapped", "highlight_pos", "topSize",
+                "copyable", "editable"]
+
     #Apply connections of various values
     def add_attr_connection(conn, cls)
         field = conn[2]
         value = conn[3]
 
         if(cls == 0)
-            objs = "@"
+            objs = "self."
         else
             objs = @context[cls]+"."
         end
 
         val = value.inspect
-        val.gsub!("\#{","\\\#{")
+        tmp = val.gsub("\#{","\\\#{")
+        val = tmp if tmp
 
         if(!field.match(/^on/))
             #Check for simple value cases
             if(val == "\"nil\"" && cls == 0)
-                @init += "self.#{field} = nil\n"
-            elsif(val == "\"[]\"" && cls == 0)
-                @init += "self.#{field} = []\n"
-            elsif(val == "\"\\\"\\\"\"" && cls == 0)
-                @init += "self.#{field} = \"\"\n"
-            elsif(val == "\"1.0\"" && cls == 0)
-                @init += "self.#{field} = 1.0\n"
+                @init += "#{objs}#{field} = nil\n"
+            elsif(val == "\"1\"" && cls == 0)
+                @init += "#{objs}#{field} = 1\n"
+            elsif(val == "\"0\"" && cls == 0)
+                @init += "#{objs}#{field} = 0\n"
+            elsif(val == "\"true\"" && cls == 0)
+                @init += "#{objs}#{field} = true\n"
             elsif(val == "\"false\"" && cls == 0)
-                @init += "self.#{field} = false\n"
-            elsif(["x", "y", "w", "h"].include? field)
-                @init += "@#{field} = #{val}\n"
+                @init += "#{objs}#{field} = false\n"
+            elsif(val == "\"[]\"" && cls == 0)
+                @init += "#{objs}#{field} = []\n"
+            elsif(val == "\"\\\"\\\"\"" && cls == 0)
+                @init += "#{objs}#{field} = \"\"\n"
+            elsif(val == "\"1.0\"" && cls == 0)
+                @init += "#{objs}#{field} = 1.0\n"
+            elsif(val == "\"0.5\"" && cls == 0)
+                @init += "#{objs}#{field} = 0.5\n"
+            elsif(val == "\"0.75\"" && cls == 0)
+                @init += "#{objs}#{field} = 0.75\n"
+            elsif(val == "\"false\"" && cls == 0)
+                @init += "#{objs}#{field} = false\n"
+            elsif(val == "\"[:ignoreAspect]\"" && cls == 0)
+                @init += "#{objs}#{field} = [:ignoreAspect]\n"
+            elsif(Special.include? field)
+                @init += "#{objs}#{field} = #{value}\n"
             else
                 @init += "@db.connect_property(#{objs}properties[#{field.inspect}], #{val}, context)\n"
             end
@@ -322,12 +345,13 @@ class QmlIrToRuby
         eval_str =
         "class Qml::#{@class}
              def initialize(database, ui_path=\"/ui/\")
+             #t1 = Time.new
              super#{superargs}
             @db         ||= database
             @ui_path      = ui_path
             @properties ||= Hash.new
-             " + "#t1 = Time.new\n" + @setup + @init + "\n#puts \"Init #{@class} took \#{1000*(Time.new-t1)} ms\"\nend\nend"
-        #code_format_print eval_str if @class == "HarmonicEditSingle"
+             " + "#t1 = Time.new\n" + @setup + @init + "\n#puts \"#{@class}, \#{1000000*(Time.new-t1)}, 123456\"\nend\nend"
+        code_format_print eval_str if @class == "ZynAddGlobal"
         eval(eval_str, nil, "anonymous-#{@class}", 0);
     end
 
@@ -404,7 +428,7 @@ class QmlIrToRuby
 
         name = attr[2]
 
-        if(!["x","y","w", "h"].include? name)
+        if(!Special.include? name)
             @init += "Qml::prop_add(self, #{name.inspect})\n"
         end
     end
@@ -417,16 +441,8 @@ class QmlIrToRuby
 
     def code_attr(attr)
         name = attr[2]
-        if(["x","y","w", "h"].include?(name))
-            "
-            def #{name}
-                @#{name}
-            end
-
-            def #{name}=(val)
-                @#{name}=val
-            end
-            "
+        if(Special.include?(name))
+            "def #{name}; @#{name}; end; def #{name}=(vv);@#{name}=vv;end"
         else
         "
         def #{name}
@@ -560,11 +576,31 @@ def doTest
     test_summary
 
 
-    t1 = Time.new
-    mw = Qml::MainWindow.new(db)
-    t2 = Time.new
-    puts "time to create is #{1000*(t2-t1)}ms"
-    mw
+    times = []
+    (0..20).each do |i|
+        t1 = Time.new
+        db = PropertyDatabase.new
+        mw = Qml::MainWindow.new(db)
+        db.update_values
+        testSetup(mw)
+        db.update_values
+        t2 = Time.new
+        times << t2-t1
+    end
+    total = times.reduce {|a,b| a+b} 
+    avg   = total/times.length
+    puts "time to create is #{1000*avg}ms"
+    #mw
+end
+
+def testSetup(widg)
+    if(widg.respond_to? :onSetup)
+        widg.onSetup(nil)
+    end
+    n = widg.children.length
+    (0...n).each do |i|
+        testSetup(widg.children[i])
+    end
 end
 
 def doFastLoad
@@ -576,20 +612,6 @@ def doFastLoad
         QmlIrToRuby.new(lir)
         t3 = Time.new
         mw  = Qml::MainWindow.new(db)
-        #mw = Qml::DemoLayers.new(db)
-        #mw = Qml::ZynLLFO.new(db)
-        #mw = Qml::OverlayTest.new(db)
-        #mw = Qml::VolumeKnob.new(db)
-        #mw = Qml::TestSwap.new(db)
-        #mw = Qml::Envelope.new(db)
-        #mw = Qml::Selector.new(db)
-        #mw = Qml::Knob.new(db)
-        #mw = Qml::TestLfoVis.new(db)
-        #mw = Qml::TestRows.new(db)
-        #mw = Qml::VisFilter.new(db)
-        #mw = Qml::ZynOscil.new(db)
-        #mw = Qml::ZynAddVoiceList.new(db)
-        #mw = Qml::ZynPadHarmonics.new(db)
         t4 = Time.new
         puts "Time for a fast load is #{1000*(t4-t1)}ms load(#{1000*(t2-t1)}) class(#{1000*(t3-t2)}) spawn(#{1000*(t4-t3)})..."
         db.force_update
@@ -627,6 +649,7 @@ def createInstance(name, parent, pdb)
         parent.children = children
         child
     else
+        puts "SSSSSSSSSSSSSSLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLOOOOOOOOOOOOOOOOOOOOOOOOOWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW"
         qml_ir = QmlIRCache
         ir     = qml_ir[name]
         pbvm   = ProgBuildVM.new(ir, qml_ir, pdb)

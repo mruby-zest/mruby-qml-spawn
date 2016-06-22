@@ -9,16 +9,6 @@ class Callable
         @value = nil
         @eval_value = nil
         @ctx = ctx
-        #if(!ctx.nil?)
-        #    ctx.each do |key, val|
-        #        inst_variable_name = "@#{method_name}".to_sym
-        #        self.define_method key do
-        #            val
-        #        end
-        #        #self.instance_eval("def #{key};@ctx[\"#{key}\"];end")
-        #    end
-        #end
-        #puts "callable time is #{1000*(Time.new-t1)}ms"
     end
     def value=(x)
         @value = x
@@ -33,8 +23,6 @@ class Callable
     def call
         result = nil
         if(!@eval_value.nil? && !@eval_value.to_s.nil?)
-            #$calls += 1
-            #puts "call#{$calls}..."
             result = get_value
         else
             result = @value
@@ -50,7 +38,6 @@ class Callable
     def registerExternal(x)
     end
     def method_missing(sym, *args, &block)
-        #puts "method missing"
         if(@ctx.include? sym.to_s)
             @ctx[sym.to_s]
         else
@@ -58,6 +45,10 @@ class Callable
             puts "unknown context method..."
             puts @ctx
         end
+    end
+
+    def to_s()
+        "<Callable:#{@value.inspect}-#{@eval_value.inspect}>"
     end
 end
 
@@ -76,11 +67,8 @@ end
 
 class Property
     def initialize(id, cb=nil)
-        @ppath = "/ui/"
         @identifier = id
         @stale = true
-        @different = false
-        @selfDifferent = true
         @value = nil
         @depends = []
         @callback = cb
@@ -93,30 +81,18 @@ class Property
     end
     #Parent path
     attr_accessor :ppath
-    #Debug Information on where property is defined
-    attr_accessor :source
     #Fully qualified name of property
     attr_accessor :identifier
-    #Local name of property
-    attr_accessor :fieldname
-    #Boolean property if this data is bound to a literal value
-    attr_accessor :literal
     #List of known properties which this property reads from
     attr_accessor :depends
     #List of known properties which this property writes to
     attr_accessor :rdepends
     #Boolean property if this data is out-of-date
     attr_accessor :stale
-    #Boolean property if this data has changed in the past frame
-    attr_accessor :different
-    #Boolean property for if the cb/literal value has changed
-    attr_accessor :selfDifferent
     #Proc Callback for obtaining the new value
     attr_accessor :callback
     #Any value that the current object produces
     attr_accessor :value
-    #Any value that the current object produced on the previous frame
-    attr_accessor :oldValue
     #Container for onXYZ methods
     attr_accessor :onWrite
 
@@ -136,11 +112,6 @@ class Property
         else
             out = out+">"
         end
-        #if(@rdepends.empty?)
-        #    out+">"
-        #else
-        #    out+"rdep=#{@rdepends.to_a}>"
-        #end
     end
 
     def id
@@ -155,24 +126,8 @@ class PropertyDatabase
         @old_read_list = []
         @plist = []
         @stale_rdep_graph = true
-    end
-
-    def get_prop(identifier)
-        prop = nil
-        @plist.each do |x|
-            if(x.id == identifier)
-                prop = x
-            end
-        end
-        prop
-    end
-
-    def load_id(identifier)
-        #puts "Loading ID=#{identifier}"
-        prop = get_prop identifier
-        if(prop)
-            load_property(prop)
-        end
+        @read_count = 0
+        @needs_update = false
     end
 
     def try_patch_rdep(prop, ndep)
@@ -187,10 +142,6 @@ class PropertyDatabase
     end
 
     def update_dependency(prop, ndep)
-        #puts("updating dep graph to #{ndep}")
-        if(ndep.length == 0)
-            prop.literal = true
-        end
         if(ndep != prop.depends)
             try_patch_rdep(prop, ndep)
         end
@@ -198,105 +149,58 @@ class PropertyDatabase
     end
 
     def load_property(prop)
-        if(!prop.is_a? Property)
-            puts "Invalid Property(LP):"
-            #pp prop
-            puts prop.class
-            puts prop
-        end
+        @read_count += 1
+
         #puts "[DEBUG] Loading #{prop.id} at transaction #{@transaction_nest}"
-        if(@transaction_nest != 0)
-            @read_list << prop
-        end
-        if(!prop.selfDifferent && !prop.stale)
-            #puts "[DEBUG]    quick return #{prop.value}"
-            return prop.value
-        end
-        plausably_different = prop.selfDifferent
+
+        #Insert dependency information on load
+        @read_list << prop if(@transaction_nest != 0)
+
+        #Return quickly if there is no callback or if the property is known to
+        #be non-stale
+        return prop.value if  prop.callback.nil?
+        return prop.value if !prop.stale
+
         prop.depends.each do |x|
-            if(x.stale)
-                load_id(x)
-            end
-            plausably_different |= x.different
+            load_property(x) if x.stale
         end
-        if(plausably_different)
-            prop.oldValue = prop.value
 
-            #puts "Original Dep(#{prop.identifier}) = #{prop.depends}"
-            #puts "[DEBUG] Loading..."
-            start_load_transaction()
-            prop.value = prop.callback.call()
-            read_list = end_load_transaction()
+        oldValue = prop.value
 
-            #TODO react to prop.depends != @read_list
-            #puts "New      Dep(#{prop.identifier}) = #{read_list}"
-            if(read_list != prop.depends || prop.depends == [])
-                update_dependency(prop, read_list)
+        #puts "[DEBUG] Loading..."
+        start_load_transaction()
+        prop.value = prop.callback.call()
+        read_list  = end_load_transaction()
+
+        update_dependency(prop, read_list) if read_list != prop.depends
+        
+        if(oldValue != prop.value)
+            prop.onWrite.each do |x|
+                x.call
             end
-
-            prop.selfDifferent = false
-            if(prop.value != prop.oldValue)
-                prop.onWrite.each do |x|
-                    x.call
-                end
-                prop.different = true
-            else
-                prop.different = false
-            end
-            prop.stale = false
-        else
-            prop.stale = false
         end
+
+        prop.stale = false
+
         #puts "[DEBUG]#{prop.identifier}[#{plausably_different}] = #{prop.value}"
         #puts "[DEBUG]    slow return #{prop.value}"
         prop.value
     end
 
-    def make_stale(id)
-        prop = get_prop id
-        if(prop.stale)
-            return
-        end
-        prop.stale = true
-        @plist.each do |x|
-            if(x.depends.include? prop)
-                make_stale(x.identifier)
+    def write_property(p, value)
+        #Update value and mark dependent properties as stale
+        p.callback = nil
+        if(p.value != value)
+            p.value    = value
+            p.onWrite.each do |x|
+                x.call
             end
         end
-    end
-
-    def write(id, cb)
-        prop = get_prop id
-        prop.callback = cb
-        prop.selfDifferent = true
-        make_stale id
-
-        #needed for onWrite methods...
-        load_property prop
-        #prop.onWrite.each do |x|
-        #    x.call
-        #end
-    end
-
-    def write_property(p, value)
-        if(!(p.is_a? Property))
-            puts "Invalid property(WP):"
-            puts p.class
-            puts p
-            #pp p
+        if(p.stale)
+            p.stale = false
+        else
+            propigate_stale p
         end
-        #Find all properties which are in the transitive closure of depending on
-        #Property 'p'
-        #puts "Updating callback to be '#{value}'"
-        c = Callable.new
-        c.value = value
-        p.callback = c
-        p.value = value
-        p.stale = true
-        p.different = true
-        #transitive_closure
-        make_rdepends
-        propigate_stale p
     end
 
     def make_rdepends
@@ -315,16 +219,13 @@ class PropertyDatabase
             puts "[#{@plist.length}]<#{1000*(t2-t1)} ms>"
             @stale_rdep_graph = false
         end
-        #@plist.each do |x|
-        #    puts "ID: #{x}"
-        #    puts "   " + x.rdepends.to_s
-        #end
     end
 
     def propigate_stale(src)
-        src.stale = true
+        return if src.stale
         src.rdepends.each do |prop|
             if(!prop.stale)
+                prop.stale = true
                 propigate_stale prop
             end
         end
@@ -332,21 +233,15 @@ class PropertyDatabase
 
     def connect_property(p, cb, context)
         #t1 = Time.new
-        if(!(p.is_a? Property))
-            puts "Invalid property(CP):"
-            puts p.class
-            puts p
-            #pp p
-            raise Exception.new()
-        end
         if(cb.is_a? String)
             if(cb[0] == "{")
                 cb = "begin\n"+cb[1..-2]+"\nend"
             end
             c = Callable.new(context)
-            c.eval_value = cb
-            p.callback = c
-            p.stale = true
+            c.eval_value  = cb
+            p.callback    = c
+            p.stale       = true
+            @needs_update = true
         else
             puts "I don't understand this connection..."
             puts cb.class
@@ -358,12 +253,6 @@ class PropertyDatabase
     end
 
     def connect_watcher(p, cb, context)
-        if(!(p.is_a? Property))
-            puts "Invalid property(CW):"
-            puts p.class
-            puts p
-            #pp p
-        end
         if(cb.is_a? String)
             if(cb[0] == "{")
                 cb = "begin\n"+cb[1..-2]+"\nend"
@@ -401,11 +290,7 @@ class PropertyDatabase
     def to_s
         out = "#<ParameterDatabase"
         @plist.each do |p|
-            if(p.literal)
-                out += "\n" + p.to_s
-            else
-                out += "\n" + p.to_s
-            end
+            out += "\n" + p.to_s
         end
         out + ">"
     end
@@ -413,23 +298,23 @@ class PropertyDatabase
     def force_update()
         @plist.each do |x|
             x.stale         = true
-            x.selfDifferent = true
         end
         update_values
     end
 
     def update_values()
         @plist.each do |x|
-            if(x.callback == nil)
+            if(x.callback.nil? || !x.stale)
                 next
             end
-            #pp x
             load_property x
-            #pp x
         end
     end
 
-    def read(handle)
+    attr_accessor :plist
+
+    def reads()
+        @read_count
     end
 
     def add_property(prop)
@@ -437,9 +322,6 @@ class PropertyDatabase
     end
 
     def remove_properties(del_list)
-        #puts "Delete   list size is #{del_list.length}"
-        #puts "Property list size is #{@plist.length}"
-        old = Time.new
         del_set = Set.new(del_list)
         next_list = []
 
@@ -447,7 +329,7 @@ class PropertyDatabase
             next_list << x if !(del_set.include? x)
         end
         @plist = next_list
-        #puts "output length = #{next_list.length}"
-        puts "[INFO] remove_properties(#{Time.new-old})"
     end
+
+    attr_reader :needs_update
 end
