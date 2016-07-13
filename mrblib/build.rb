@@ -351,7 +351,7 @@ class QmlIrToRuby
             @ui_path      = ui_path
             @properties ||= Hash.new
              " + "#t1 = Time.new\n" + @setup + @init + "\n#puts \"#{@class}, \#{1000000*(Time.new-t1)}, 123456\"\nend\nend"
-        code_format_print eval_str if @class == "ZynAddGlobal"
+        #code_format_print eval_str if @class == "ZynAddGlobal"
         eval(eval_str, nil, "anonymous-#{@class}", 0);
     end
 

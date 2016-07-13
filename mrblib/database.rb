@@ -103,7 +103,7 @@ class Property
         else
             out = out
         end
-        if(callback.eval_value)
+        if(callback && callback.eval_value)
             if(callback.eval_value.length < 20)
                 out = out+"callback=#{callback.eval_value}>"
             else
@@ -115,7 +115,11 @@ class Property
     end
 
     def id
-        @ppath+@identifier
+        if(@ppath)
+            @ppath+@identifier
+        else
+            "/empty/"+@identifier
+        end
     end
 end
 
@@ -152,6 +156,8 @@ class PropertyDatabase
         @read_count += 1
 
         #puts "[DEBUG] Loading #{prop.id} at transaction #{@transaction_nest}"
+        #puts "[DEBUG] dependency is #{prop.depends}"
+        #puts "[DBBUG] [#{prop.callback.nil?}, #{prop.stale}, #{prop.value}]"
 
         #Insert dependency information on load
         @read_list << prop if(@transaction_nest != 0)
@@ -167,27 +173,30 @@ class PropertyDatabase
 
         oldValue = prop.value
 
-        #puts "[DEBUG] Loading..."
+        #puts "[DEBUG] Loading #{prop.id}..." if prop.id.match(/extern/)
         start_load_transaction()
         prop.value = prop.callback.call()
         read_list  = end_load_transaction()
 
         update_dependency(prop, read_list) if read_list != prop.depends
-        
+
         if(oldValue != prop.value)
             prop.onWrite.each do |x|
+                #puts "[DEBUG] running onWrite callbacks..." if prop.id.match(/extern/)
                 x.call
             end
         end
 
         prop.stale = false
 
-        #puts "[DEBUG]#{prop.identifier}[#{plausably_different}] = #{prop.value}"
-        #puts "[DEBUG]    slow return #{prop.value}"
+        #puts "[DEBUG]#{prop.identifier}[] = #{prop.value}"
+        #puts "[DEBUG]    slow return #{prop.value}" if prop.id.match(/extern/)
         prop.value
     end
 
     def write_property(p, value)
+        #puts "[DEBUG] write property #{p} with #{value}"
+        #puts "[DEBUG] rdep = #{p.rdepends.to_a}"
         #Update value and mark dependent properties as stale
         p.callback = nil
         if(p.value != value)
@@ -198,9 +207,8 @@ class PropertyDatabase
         end
         if(p.stale)
             p.stale = false
-        else
-            propigate_stale p
         end
+        propigate_stale p
     end
 
     def make_rdepends
