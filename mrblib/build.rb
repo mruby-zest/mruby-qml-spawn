@@ -96,16 +96,22 @@ class QmlIrToRuby
         #solve_ir "TestExt"
         #solve_ir "Knob"
         #solve_ir "ZynLFO"
+        @cache_load = File.open("/tmp/fcache.rb", "w+")
         ir.each do |k, v|
             if(k[0].upcase == k[0])
                 if($damaged_classes.include? k)
+                    t1 = Time.new
                     solve_ir k
+                    t2 = Time.new
+                    puts "#{k} in #{((t2-t1)*1000).to_i} ms"
                 end
             end
         end
+        @cache_load.close
         $damaged_classes = []
         toc = Time.new
         puts "Total time is #{1000*(toc-tic)} ms"
+        exit
     end
 
     def solve_ir(cls)
@@ -136,7 +142,10 @@ class QmlIrToRuby
                 supe = "Qml::"+supe
             end
         end
-        eval("class Qml::#{cls} < #{supe};end")
+        puts "solving #{cls}"
+        estr = "class Qml::#{cls} < #{supe};end"
+        @cache_load.puts(estr)
+        eval(estr)
         #puts "installing context..."
         install_context(get_context(ir))
         #puts "processing ir..."
@@ -352,6 +361,8 @@ class QmlIrToRuby
             @properties ||= Hash.new
              " + "#t1 = Time.new\n" + @setup + @init + "\n#puts \"#{@class}, \#{1000000*(Time.new-t1)}, 123456\"\nend\nend"
         #code_format_print eval_str if @class == "ZynAddGlobal"
+        print 'I'
+        @cache_load.puts(eval_str)
         eval(eval_str, nil, "anonymous-#{@class}", 0);
     end
 
@@ -361,11 +372,17 @@ class QmlIrToRuby
             attr_reader   :properties
             attr_accessor :db, :ui_path
         end
+        @cache_load.puts("class Qml::#{@class}")
+        @cache_load.puts("  attr_reader :properties")
+        @cache_load.puts("  attr_accessor :db, :ui_path")
+        @cache_load.puts("end")
     end
 
     #Create class method
     def install_method(meth)
         (name, args, code) = meth[2..4]
+        print 'M'
+        @cache_load.puts("class Qml::#{@class}\n def #{name}(#{args});#{code};end\n end")
         eval("class Qml::#{@class}\n def #{name}(#{args});#{code};end\n end", nil, meth.file, meth.line)
     end
 
@@ -384,6 +401,7 @@ class QmlIrToRuby
         anon_test = /^anony/
         @init += "\ncontext = Hash.new\n"
         ctx.each do |k,v|
+            @cache_load.puts("class Qml::#{@class}\n def #{k};#{v};end\n end")
             eval("class Qml::#{@class}\n def #{k};#{v};end\n end")
             if(!k.inspect.match(/anonymous/))
                 @init += "context[#{k.inspect}] = #{v}\n"
@@ -424,7 +442,10 @@ class QmlIrToRuby
     #Create attribute reader/writer pairs
     def install_attr(attr)
         #Add reader/writer
-        eval("class Qml::#{@class}\n #{code_attr(attr)}\n end", nil, attr.file, attr.line)
+        print 'A'
+        estr = "class Qml::#{@class}\n #{code_attr(attr)}\n end"
+        eval(estr, nil, attr.file, attr.line)
+        @cache_load.puts(estr)
 
         name = attr[2]
 
@@ -603,13 +624,14 @@ def testSetup(widg)
     end
 end
 
-def doFastLoad
+def doFastLoad(search=nil)
     t1 = Time.new
     db  = PropertyDatabase.new
-    lir = loadIR
+    workaround = nil
+    lir = workaround || loadIR(search)
     if(lir)
         t2 = Time.new
-        QmlIrToRuby.new(lir)
+        workaround || QmlIrToRuby.new(lir)
         t3 = Time.new
         mw  = Qml::MainWindow.new(db)
         t4 = Time.new

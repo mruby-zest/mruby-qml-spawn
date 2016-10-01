@@ -1,21 +1,26 @@
 GlobalIRCache = Hash.new
 $damaged_classes = []
 
-def loadIR
+def loadIR(search=nil)
     l = Parser.new
-    qml_data = [
-        Dir.glob("../mruby-zest/mrblib/*.qml"),
-        Dir.glob("../mruby-zest/qml/*.qml"),
-        Dir.glob("../mruby-zest/test/*.qml"),
-        Dir.glob("../mruby-qml-spawn/test/*.qml"),
-        Dir.glob("../mruby-zest/example/*.qml"),
-        Dir.glob("src/mruby-zest/mrblib/*.qml"),
-        Dir.glob("src/mruby-zest/qml/*.qml"),
-        Dir.glob("src/mruby-zest/test/*.qml"),
-        Dir.glob("src/mruby-qml-spawn/test/*.qml"),
-        Dir.glob("src/mruby-zest/example/*.qml"),
-        Dir.glob("qml/*.qml")
-    ].flatten
+    qml_data = nil
+    if(search.nil?)
+        qml_data = [
+            Dir.glob("../mruby-zest/mrblib/*.qml"),
+            Dir.glob("../mruby-zest/qml/*.qml"),
+            Dir.glob("../mruby-zest/test/*.qml"),
+            Dir.glob("../mruby-qml-spawn/test/*.qml"),
+            Dir.glob("../mruby-zest/example/*.qml"),
+            Dir.glob("src/mruby-zest/mrblib/*.qml"),
+            Dir.glob("src/mruby-zest/qml/*.qml"),
+            Dir.glob("src/mruby-zest/test/*.qml"),
+            Dir.glob("src/mruby-qml-spawn/test/*.qml"),
+            Dir.glob("src/mruby-zest/example/*.qml"),
+            Dir.glob("qml/*.qml")
+        ].flatten
+    else
+        qml_data = [Dir.glob(search+"qml/*.qml")].flatten
+    end
     qml_ir   = Hash.new
     different_file = false
     qml_data.each do |q|
