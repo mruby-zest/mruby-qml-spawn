@@ -97,7 +97,8 @@ class Property
     attr_accessor :onWrite
 
     def to_s()
-        out = "#<Property:#{id}=#{@stale?"?":"XX"}"
+        tmp = @stale ? "?" : "XX"
+        out = "#<Property:#{self.id}=#{tmp}"
         if(!@depends.empty?)
             out = out+"dep=#{@depends.each{|x|x.id}.join}"
         else
