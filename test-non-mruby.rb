@@ -25,6 +25,12 @@ module OSC
         def options
             ["a", "b", "c"]
         end
+        def min
+            127.0
+        end
+        def max
+            0.0
+        end
     end
     class RemoteParam
         def initialize(a,b)
@@ -33,10 +39,20 @@ module OSC
         end
         def mode=(x)
         end
+        def set_min(x)
+            127.0
+        end
+        def set_max(x)
+            0.0
+        end
+        def clean()
+        end
     end
 end
 class NilClass
     def log_widget=(x)
+    end
+    def get_view_pos(x)
     end
 end
 require_relative "../mruby-zest/mrblib/draw-common.rb"
@@ -49,7 +65,8 @@ require_relative "mrblib/loader.rb"
  
 doTest
 
-#RubyProf.start
+RubyProf.measure_mode = RubyProf::ALLOCATIONS
+RubyProf.start
 begin
     times = []
     (0..20).each do |i|
@@ -66,8 +83,10 @@ begin
     avg   = total/times.length
     puts "time to create is #{1000*avg}ms"
 end
-#result = RubyProf.stop
+result = RubyProf.stop
 
 # print a flat profile to text
+printer = RubyProf::CallStackPrinter.new(result)
 #printer = RubyProf::CallTreePrinter.new(result)
-#printer.print(File.open("./log-june-21-1110.txt","w"))
+#printer.print(File.open("./log-dec-09-2016.txt","w"))
+printer.print(File.open("./log-dec-29-2016.html","w"))

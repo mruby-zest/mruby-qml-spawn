@@ -1,6 +1,7 @@
 GlobalIRCache = Hash.new
 $damaged_classes = []
 
+#Load IR For mruby-zest interface
 def loadIR(search=nil)
     l = Parser.new
     qml_data = nil

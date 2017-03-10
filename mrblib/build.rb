@@ -21,7 +21,7 @@ $total_objs = 0
 module Qml
     def self.context_apply(ctx, cls)
         ctx.each do |k,v|
-            cls.send(k+"=", v)
+            cls.send(k+"=", v) if cls.respond_to?(k+"=")
         end
     end
 
@@ -39,6 +39,7 @@ module Qml
     end
 end
 
+#Print code blocks with corrected indentation
 def code_format_print(code)
     indent = 0
     l = 1
@@ -76,6 +77,7 @@ end
 
 #Class to populate the CachedClasses global
 class QmlIrToRuby
+
     #Initialize converter
     #ir      - a hash of qml names to qml IR
     #damaged - a collection of IR names which have been altered or nil for a
@@ -91,12 +93,7 @@ class QmlIrToRuby
         build_qml_dep_graph
 
         tic = Time.new
-        #solve_ir "FancyButton"
-        #solve_ir "TestBase"
-        #solve_ir "TestExt"
-        #solve_ir "Knob"
-        #solve_ir "ZynLFO"
-        @cache_load = File.open("/tmp/fcache.rb", "w+")
+        @cache_load = []#File.open("/tmp/fcache.rb", "w+")
         ir.each do |k, v|
             if(k[0].upcase == k[0])
                 if($damaged_classes.include? k)
@@ -107,14 +104,48 @@ class QmlIrToRuby
                 end
             end
         end
-        @cache_load.close
+
+        begin
+            file = File.open("/tmp/fcache.rb", "w+")
+            cc   = nil
+            @cache_load.each do |cl|
+                type, cls, dat = cl
+
+                #Switching Classes
+                if(cc != cls)
+                    file.puts("end") if cc
+                    if(type == :cls_def)
+                        file.puts("class Qml::#{cls} < #{dat}")
+                    else
+                        file.puts("class Qml::#{cls}")
+                    end
+                    cc = cls
+                end
+
+                #Normal Statements
+                if(type == :attr ||
+                   type == :method ||
+                   type == :reader ||
+                   type == :accessor)
+                    file.print("  ")
+                    file.puts(dat)
+                elsif(type == :cls_def)
+                    #Do nothing else
+                else
+                    raise :unhandled
+                end
+            end
+
+            file.puts("end") if cc
+            file.close
+        end
         $damaged_classes = []
         toc = Time.new
         puts "Total time is #{1000*(toc-tic)} ms"
-        #exit
     end
 
     def solve_ir(cls)
+        #Push old state onto stack
         old    = @class
         oldi   = @init
         olds   = @setup
@@ -127,6 +158,8 @@ class QmlIrToRuby
         @setup = ""
         @cc_id = 0
         @context = []
+
+
         #puts "========================================================================="
         #puts "Solving class = #{cls}"
         #puts "super is #{supe}"
@@ -144,10 +177,11 @@ class QmlIrToRuby
         end
         #puts "solving #{cls}"
         estr = "class Qml::#{cls} < #{supe};end"
-        @cache_load.puts(estr)
+        @cache_load << [:cls_def, cls, supe]
         eval(estr)
         #puts "installing context..."
-        install_context(get_context(ir))
+        ctx, use, keys = get_context(ir)
+        install_context(ctx, use, keys)
         #puts "processing ir..."
         ir.each do |x|
             consume_instruction x
@@ -159,6 +193,8 @@ class QmlIrToRuby
         #puts "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
         #puts "Done with #{@class}"
         #puts "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+
+        #Pop state off stack
         @cc_id = oldcc
         @class = old
         @init  = oldi
@@ -206,10 +242,8 @@ class QmlIrToRuby
             @cc_id += 1
         when AA
             id = inst[1]
-            #puts "Adding attribute..."
             add_attr(inst, id)
         when AM
-            #puts "Adding Function..."
             obj = inst[1]
             add_method(inst, obj)
         when SP
@@ -220,9 +254,7 @@ class QmlIrToRuby
             add_attr_connection(inst, obj)
         when CI
             obj = inst[1]
-            #puts "Ignoring..."
-        when EC
-            #puts "Ignoring..."
+        when EC #ignore
         else
             puts "Unknown Opcode..."
             puts inst
@@ -246,22 +278,79 @@ class QmlIrToRuby
         nil
     end
 
-    def get_context ir
+    def map_include(needles, haystack)
+        out = []
+        needles.each do |n|
+            out << haystack.include?(n)
+        end
+        out
+    end
+
+    def map_or!(a,b)
+        (0...a.length).each do |i|
+            a[i] = a[i] || b[i]
+        end
+        a
+    end
+
+    def print_matrix(m)
+        m.each do |mm|
+            mm.each do |mmm|
+                print "1" if  mmm
+                print "0" if !mmm
+            end
+            puts
+        end
+    end
+
+    def get_context(ir)
         ctx = Hash.new
+        keys = []
+
+        #Identify context fields
         off = 0
         ir.each do |inst|
             if(inst.type == CC && inst.length == 4)# && inst[3] != "anonymous")
                 if(off == 0)
-                    ctx[inst[3]] = "self"#inst[1]
+                    ctx[inst[3]] = "self"
                     @context[off] = "self"
                 else
-                    ctx[inst[3]] = "@"+inst[3]#inst[1]
+                    ctx[inst[3]] = "@"+inst[3]
                     @context[off] = "@"+inst[3]
                 end
+                keys << inst[3]
                 off += 1
             end
         end
-        ctx
+
+        use_mtx = []
+        n = keys.length
+        n.times do
+            t = []
+            n.times do
+                t << false
+            end
+            use_mtx << t
+        end
+
+        #check connect_attr and add_method instructions for context references
+        ir.each do |inst|
+            #if(inst.type == CA)
+            #    id = inst[1]
+            #    tmp = map_include(keys, inst.fields[2])
+            #    map_or!(use_mtx[id], tmp)
+            if(inst.type == AM)
+                #puts inst.fields[3]
+                id = inst[1]
+                tmp = map_include(keys, inst.fields[3])
+                map_or!(use_mtx[id], tmp)
+            end
+        end
+
+        #puts ctx.inspect
+        #puts keys.inspect
+        #print_matrix(use_mtx)
+        return [ctx, use_mtx, keys]
     end
 
     #Create method
@@ -289,6 +378,57 @@ class QmlIrToRuby
                "renderer", "action", "whenSwapped", "highlight_pos", "topSize",
                 "copyable", "editable"]
 
+    Literals = ["nil", "1", "0", "true", "false", "[]", "1.0", "0.5", "0.75",
+                "false", "[:ignoreAspect]"]
+    def literal?(x)
+        if(x[0] != '"' || x[-1] != '"')
+            false
+        else
+            Literals.include?(strip_literal(x))
+        end
+    end
+
+    def strip_literal(x)
+        x[1..-2]
+    end
+
+    def pure_string(x)
+        return false if x[0] != '"'
+        return false if x[-1] != '"'
+        x[1..-2].each_char do |i|
+            return false unless /[:a-zA-Z 0-9\/]/.match(i)
+        end
+        true
+    end
+
+    def pure_numeric(x)
+        x.each_char do |i|
+            return false unless /[\.0-9]/.match(i)
+        end
+        true
+    end
+
+    def pure_symbol(x)
+        return false if x[0] != ":"
+        x[1..-1].each_char do |i|
+            return false unless /[a-zA-Z]/.match(i)
+        end
+        true
+    end
+
+    def make_callback(value)
+        pr = "lambda {"
+        #@context.each do |c|
+        #    cc  = c[1..-1]
+        #    pr += "#{cc} = #{c}\n" if value.include?(cc)
+        #end
+        if(value[0] == "{")
+            value = "begin\n"+value[1..-2]+"\nend"
+        end
+        pr += value + "}"
+        pr
+    end
+
     #Apply connections of various values
     def add_attr_connection(conn, cls)
         field = conn[2]
@@ -306,39 +446,21 @@ class QmlIrToRuby
 
         if(!field.match(/^on/))
             #Check for simple value cases
-            if(val == "\"nil\"" && cls == 0)
-                @init += "#{objs}#{field} = nil\n"
-            elsif(val == "\"1\"" && cls == 0)
-                @init += "#{objs}#{field} = 1\n"
-            elsif(val == "\"0\"" && cls == 0)
-                @init += "#{objs}#{field} = 0\n"
-            elsif(val == "\"true\"" && cls == 0)
-                @init += "#{objs}#{field} = true\n"
-            elsif(val == "\"false\"" && cls == 0)
-                @init += "#{objs}#{field} = false\n"
-            elsif(val == "\"[]\"" && cls == 0)
-                @init += "#{objs}#{field} = []\n"
+            if(literal?(val))
+                @init += "#{objs}#{field} = #{strip_literal(val)}\n"
             elsif(val == "\"\\\"\\\"\"" && cls == 0)
                 @init += "#{objs}#{field} = \"\"\n"
-            elsif(val == "\"1.0\"" && cls == 0)
-                @init += "#{objs}#{field} = 1.0\n"
-            elsif(val == "\"0.5\"" && cls == 0)
-                @init += "#{objs}#{field} = 0.5\n"
-            elsif(val == "\"0.75\"" && cls == 0)
-                @init += "#{objs}#{field} = 0.75\n"
-            elsif(val == "\"false\"" && cls == 0)
-                @init += "#{objs}#{field} = false\n"
-            elsif(val == "\"[:ignoreAspect]\"" && cls == 0)
-                @init += "#{objs}#{field} = [:ignoreAspect]\n"
             elsif(Special.include? field)
                 @init += "#{objs}#{field} = #{value}\n"
+            elsif(pure_string(value) || pure_numeric(value) || pure_symbol(value))
+                @init += "#{objs}#{field} = #{value}\n"
             else
-                @init += "@db.connect_property(#{objs}properties[#{field.inspect}], #{val}, context)\n"
+                @init += "@db.connect_property(#{objs}properties[#{field.inspect}], #{make_callback(value)})\n"
             end
         else
             field    = field[2..-1]
             field[0] = field[0].downcase
-            @init += "@db.connect_watcher(#{objs}properties[#{field.inspect}], #{val}, context)\n"
+            @init += "@db.connect_watcher(#{objs}properties[#{field.inspect}], #{make_callback(value)})\n"
         end
     end
 
@@ -351,17 +473,20 @@ class QmlIrToRuby
         if(sup[0..4] == "Qml::")
             superargs = "(database, ui_path)"
         end
-        eval_str =
-        "class Qml::#{@class}
-             def initialize(database, ui_path=\"/ui/\")
-             #t1 = Time.new
-             super#{superargs}
-            @db         ||= database
-            @ui_path      = ui_path
-            @properties ||= Hash.new
-             " + "#t1 = Time.new\n" + @setup + @init + "\n#puts \"#{@class}, \#{1000000*(Time.new-t1)}, 123456\"\nend\nend"
+        inner = "def initialize(database, ui_path=\"/ui/\")
+    #t1 = Time.new
+    super#{superargs}
+    @db         ||= database
+    @ui_path      = ui_path
+    @properties ||= Hash.new
+    #t1 = Time.new
+    #{@setup}
+    #{@init}
+    #puts \"#{@class}, \#{1000000*(Time.new-t1)}, 123456\"
+end"
+        eval_str = "class Qml::#{@class};#{inner};\nend"
         #code_format_print eval_str if @class == "ZynAddGlobal"
-        @cache_load.puts(eval_str)
+        @cache_load << [:method, @class, inner]
         eval(eval_str, nil, "anonymous-#{@class}", 0);
     end
 
@@ -371,16 +496,14 @@ class QmlIrToRuby
             attr_reader   :properties
             attr_accessor :db, :ui_path
         end
-        @cache_load.puts("class Qml::#{@class}")
-        @cache_load.puts("  attr_reader :properties")
-        @cache_load.puts("  attr_accessor :db, :ui_path")
-        @cache_load.puts("end")
+        @cache_load << [:attr, @class, "attr_reader :properties"]
+        @cache_load << [:attr, @class, "attr_accessor :db, :ui_path"]
     end
 
     #Create class method
     def install_method(meth)
         (name, args, code) = meth[2..4]
-        @cache_load.puts("class Qml::#{@class}\n def #{name}(#{args});#{code};end\n end")
+        @cache_load << [:method, @class, "def #{name}(#{args});#{code};end"]
         eval("class Qml::#{@class}\n def #{name}(#{args});#{code};end\n end", nil, meth.file, meth.line)
     end
 
@@ -394,14 +517,18 @@ class QmlIrToRuby
     end
 
     #Create id->object mapper
-    def install_context ctx
+    def install_context(ctx, use, keys)
         #puts "ctx = #{ctx}"
         anon_test = /^anony/
         @init += "\ncontext = Hash.new\n"
-        ctx.each do |k,v|
-            @cache_load.puts("class Qml::#{@class}\n def #{k};#{v};end\n end")
-            eval("class Qml::#{@class}\n def #{k};#{v};end\n end")
+        n = keys.length
+        (0...n).each do |i|
+            k = keys[i]
+            v = ctx[k]
             if(!k.inspect.match(/anonymous/))
+                @cache_load << [:reader, @class, "attr_reader :#{k}"]
+                eval("class Qml::#{@class}\n def #{k};#{v};end\n end")
+
                 @init += "context[#{k.inspect}] = #{v}\n"
             end
 
@@ -410,15 +537,21 @@ class QmlIrToRuby
             end
 
             num_fields = 0
-            ctx.each do |kk,vv|
-                if(!(kk.match anon_test))
+            (0...n).each do |j|
+                next if(use[i][j] == false)
+
+                if(!(ctx[keys[j]].match anon_test))
                     num_fields += 1
                 end
             end
 
             if(num_fields != 0)
                 @init += "#{v}.instance_eval do\n"
-                ctx.each do |kk,vv|
+                (0...n).each do |j|
+
+                    next if(use[i][j] == false)
+
+                    kk = keys[j]
                     if(kk.match anon_test)
                         next
                     end
@@ -429,20 +562,28 @@ class QmlIrToRuby
             end
         end
 
-        ctx.each do |k,v|
+        (0...n).each do |i|
+            k = keys[i]
+            v = ctx[k]
             if(v == "self")
                next
             end
-            @init += "Qml::context_apply(context, @#{k})\n"
+            sum = 0
+            (0...n).each do |j|
+                sum += 1 if use[i][j]
+            end
+
+            @init += "Qml::context_apply(context, @#{k})\n" if sum != 0
         end
     end
 
     #Create attribute reader/writer pairs
     def install_attr(attr)
         #Add reader/writer
-        estr = "class Qml::#{@class}\n #{code_attr(attr)}\n end"
+        inner = code_attr(attr)
+        estr = "class Qml::#{@class}\n #{inner}\n end"
         eval(estr, nil, attr.file, attr.line)
-        @cache_load.puts(estr)
+        @cache_load << [:accessor, @class, inner]
 
         name = attr[2]
 
@@ -460,26 +601,35 @@ class QmlIrToRuby
     def code_attr(attr)
         name = attr[2]
         if(Special.include?(name))
-            "def #{name}; @#{name}; end; def #{name}=(vv);@#{name}=vv;end"
+            "attr_accessor :#{name}"
         else
-        "
-        def #{name}
-            prop = @properties[\"#{name}\"]
-            @db.load_property(prop);
-        end
-
-        def #{name}=(val)
-            prop = @properties[\"#{name}\"]
-            @db.write_property(prop,val);
-            prop.onWrite.each do |cb|
-                cb.call
-            end
-        end
-        "
+            "attr_property :#{name}"
         end
     end
+end
 
+class Module
+    def attr_property(property)
+        pstring = property.to_s
 
+        define_method property do
+            prop = @properties[pstring]
+            tmp  = @db.load_property(prop)
+        end
+        define_method "#{pstring}=" do |new_value|
+            prop = @properties[pstring]
+            @db.write_property(prop,new_value);
+
+            #Inline loop
+            ind      = 0
+            on_write = prop.onWrite
+            n        = on_write.length
+            while(ind < n)
+                on_write[ind].call
+                ind += 1
+            end
+        end
+    end
 end
 
 
@@ -563,7 +713,7 @@ def doTest
     assert_nil(tb.p2,     "A chained property is initialized to the appropriate value")
 
     tb.p1 = 1
-    #puts db.to_s
+    db.force_update
     assert_not_nil(tb.p1, "A property is updated to the appropriate value")
     assert_not_nil(tb.p2, "A chained property is updated to the appropriate value")
     assert_not_nil(tb.p3, "A chained property is updated to the appropriate value")
@@ -605,7 +755,7 @@ def doTest
         t2 = Time.new
         times << t2-t1
     end
-    total = times.reduce {|a,b| a+b} 
+    total = times.reduce {|a,b| a+b}
     avg   = total/times.length
     puts "time to create is #{1000*avg}ms"
     #mw
@@ -621,6 +771,7 @@ def testSetup(widg)
     end
 end
 
+#Load new classes if there are changes in files which should be hot loaded
 def doFastLoad(search=nil)
     t1 = Time.new
     db  = PropertyDatabase.new
@@ -631,6 +782,7 @@ def doFastLoad(search=nil)
         workaround || QmlIrToRuby.new(lir)
         t3 = Time.new
         mw  = Qml::MainWindow.new(db)
+        #mw  = Qml::ZynResOptions.new(db)
         t4 = Time.new
         puts "Time for a fast load is #{1000*(t4-t1)}ms load(#{1000*(t2-t1)}) class(#{1000*(t3-t2)}) spawn(#{1000*(t4-t3)})..."
         db.force_update
@@ -641,7 +793,7 @@ def doFastLoad(search=nil)
     end
     #TODO make this rescue only capture missing file issues
 rescue Exception=>e
-    puts e 
+    puts e
     e.backtrace.each do |ln|
         puts ln
     end
