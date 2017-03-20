@@ -2,6 +2,8 @@
 #This global keeps track of where they are searched for
 QmlSearchPath = []
 
+$ruby_mode = :MRuby
+
 #Cached Information
 ##When a qml class is processed it can be cached as a real class
 ##This avoids incurring the cost of parsing the methods and attribute accessors
@@ -82,7 +84,7 @@ class QmlIrToRuby
     #ir      - a hash of qml names to qml IR
     #damaged - a collection of IR names which have been altered or nil for a
     #          complete regeneration
-    def initialize(ir, damaged=nil)
+    def initialize(ir, damaged=nil, cache_file=nil)
         @ir      = ir
         @class   = nil
         @context = []
@@ -105,8 +107,8 @@ class QmlIrToRuby
             end
         end
 
-        begin
-            file = File.open("/tmp/fcache.rb", "w+")
+        if(cache_file)
+            file = File.open(cache_file, "w+")
             cc   = nil
             @cache_load.each do |cl|
                 type, cls, dat = cl
@@ -510,7 +512,7 @@ end"
     def indirect_method(meth, cls)
         (name, args, code) = meth[2..4]
         code = code.inspect[1..-2]
-        code.gsub!("\#{","\\\#{")
+        code.gsub!("\#{","\\\#{") if $ruby_mode != :CRuby
         @init += "
         #{@context[cls]}.instance_eval(\"def #{name}(#{args});#{code};end\", #{meth.file.inspect}, #{meth.line})\n"
         #@init += "print '%'\n"
@@ -775,7 +777,7 @@ end
 def doFastLoad(search=nil)
     t1 = Time.new
     db  = PropertyDatabase.new
-    workaround = nil
+    workaround = true
     lir = workaround || loadIR(search)
     if(lir)
         t2 = Time.new
