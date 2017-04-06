@@ -512,7 +512,7 @@ end"
     def indirect_method(meth, cls)
         (name, args, code) = meth[2..4]
         code = code.inspect[1..-2]
-        code.gsub!("\#{","\\\#{") if $ruby_mode != :CRuby
+        #code.gsub!("\#{","\\\#{") #if $ruby_mode != :CRuby
         @init += "
         #{@context[cls]}.instance_eval(\"def #{name}(#{args});#{code};end\", #{meth.file.inspect}, #{meth.line})\n"
         #@init += "print '%'\n"
