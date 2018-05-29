@@ -31,6 +31,12 @@ module OSC
         def max
             0.0
         end
+        def units
+            ""
+        end
+        def scale
+            :linear
+        end
     end
     class RemoteParam
         def initialize(a,b)
@@ -44,6 +50,8 @@ module OSC
         end
         def set_max(x)
             0.0
+        end
+        def set_scale(x)
         end
         def clean()
         end

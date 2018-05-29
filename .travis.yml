@@ -1,0 +1,14 @@
+language: ruby
+sudo: false
+before_install:
+    - gem install ruby-prof
+    - pwd
+    - cd .. && git clone https://github.com/mruby-zest/mruby-qml-parse mruby-qml-parse
+    - pwd
+    - git clone https://github.com/mruby-zest/mruby-zest mruby-zest
+    - pwd
+    - cd mruby-qml-spawn
+    - pwd
+script:
+    - pwd
+    - ruby test-non-mruby.rb
