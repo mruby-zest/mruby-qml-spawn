@@ -20,7 +20,10 @@ def loadIR(search=nil)
             Dir.glob("qml/*.qml")
         ].flatten
     else
-        qml_data = [Dir.glob(search+"qml/*.qml")].flatten
+        qml_data = [
+            Dir.glob("src/mruby-zest/qml/*.qml"),
+            Dir.glob(search+"/*.qml")
+        ].flatten
     end
     qml_ir   = Hash.new
     different_file = false
