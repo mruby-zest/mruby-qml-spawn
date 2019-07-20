@@ -45,6 +45,8 @@ module OSC
         end
         def mode=(x)
         end
+        def type=(x)
+        end
         def set_min(x)
             127.0
         end
