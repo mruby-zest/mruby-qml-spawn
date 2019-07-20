@@ -23,7 +23,7 @@ $total_objs = 0
 module Qml
     def self.context_apply(ctx, cls)
         ctx.each do |k,v|
-            cls.send(k+"=", v) if cls.respond_to?(k+"=")
+            cls.__send__(k+"=", v) if cls.respond_to?(k+"=")
         end
     end
 
