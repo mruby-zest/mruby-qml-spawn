@@ -791,10 +791,10 @@ def testSetup(widg)
 end
 
 #Load new classes if there are changes in files which should be hot loaded
-def doFastLoad(search=nil)
+#Hotloading is activated if workaround=false.
+def doFastLoad(search=nil, workaround=true)
     t1 = Time.new
     db  = PropertyDatabase.new
-    workaround = true
     lir = workaround || loadIR(search)
     if(lir)
         t2 = Time.new
