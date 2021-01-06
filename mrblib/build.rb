@@ -110,15 +110,17 @@ class QmlIrToRuby
         if(cache_file)
             file = File.open(cache_file, "w+")
             cc   = nil
-            @cache_load.each do |cl|
+            loader = reorder_cache()
+            loader.each do |cl|
                 type, cls, dat = cl
 
                 #Switching Classes
                 if(cc != cls)
-                    file.puts("end") if cc
+                    file.puts("end") if(cc)
                     if(type == :cls_def)
                         file.puts("class Qml::#{cls} < #{dat}")
                     else
+                      puts "Innefficient irep waste"
                         file.puts("class Qml::#{cls}")
                     end
                     cc = cls
@@ -144,6 +146,21 @@ class QmlIrToRuby
         $damaged_classes = []
         toc = Time.new
         puts "Total time is #{1000*(toc-tic)} ms"
+    end
+
+    def reorder_cache()
+      known_cls = {}
+      stream_out = []
+      @cache_load.each_with_index do |cl, idx|
+        type, cls, dat = cl
+        next if(known_cls.include?(cls))
+        known_cls[cls] = true
+
+        @cache_load.each do |c|
+          stream_out << c if(c[1] == cls)
+        end
+      end
+      return stream_out
     end
 
     def solve_ir(cls)
