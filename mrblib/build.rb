@@ -120,7 +120,7 @@ class QmlIrToRuby
                     if(type == :cls_def)
                         file.puts("class Qml::#{cls} < #{dat}")
                     else
-                      puts "Innefficient irep waste"
+                        puts "Innefficient irep waste"
                         file.puts("class Qml::#{cls}")
                     end
                     cc = cls
@@ -437,10 +437,6 @@ class QmlIrToRuby
 
     def make_callback(value)
         pr = "lambda {"
-        #@context.each do |c|
-        #    cc  = c[1..-1]
-        #    pr += "#{cc} = #{c}\n" if value.include?(cc)
-        #end
         if(value[0] == "{")
             value = "begin\n"+value[1..-2]+"\nend"
         end
@@ -529,7 +525,6 @@ end"
     def indirect_method(meth, cls)
         (name, args, code) = meth[2..4]
         code = code.inspect[1..-2]
-        #code.gsub!("\#{","\\\#{") #if $ruby_mode != :CRuby
         @init += "
         #{@context[cls]}.instance_eval(\"def #{name}(#{args});#{code};end\", #{meth.file.inspect}, #{meth.line})\n"
         #@init += "print '%'\n"
