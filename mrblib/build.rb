@@ -77,6 +77,86 @@ def code_format_print(code)
     end
 end
 
+def code_compact(code)
+    out = ""
+    code2 = code.gsub("\\n", "\n")
+    code2.each_line do |ln|
+        out += ln.strip+"\\n"
+    end
+    #puts out.inspect
+    out
+end
+
+def code_format(code, base=4)
+    indent = base
+    out = ""
+    code.each_line do |ln|
+        ln = ln.strip
+        if(ln.match(/;$/))
+            ln = ln[0..-2]
+        end
+
+        if(ln.match(/^end$/))
+            indent -= 4
+        elsif(ln.match(/^end}/))
+            indent -= 4
+        elsif(ln.match(/^else/))
+            indent -= 4
+        elsif(ln.match(/^elsif/))
+            indent -= 4
+        elsif(ln.match(/^when$/))
+            indent -= 4
+        elsif(ln.match(/^}/))
+            indent -= 4
+        end
+
+        indent = 0 if indent < 0
+
+        if(!ln.empty?)
+            out << " "*indent + ln + "\n"
+        end
+
+
+        if(ln.match(/instance_eval\("/))
+            indent += 0
+        elsif(ln.match(/^class/))
+            indent += 4
+        elsif(ln.match(/^def/))
+            indent += 4
+            if(ln.match(/^def.*end$/))
+                indent -= 4
+            end
+        elsif(ln.match(/^if/))
+            indent += 4
+        elsif(ln.match(/^else/))
+            indent += 4
+        elsif(ln.match(/^elsif/))
+            indent += 4
+        elsif(ln.match(/^when$/))
+            indent += 4
+        elsif(ln.match(/^case/))
+            indent += 4
+        elsif(ln.match(/do$/))
+            indent += 4
+        elsif(ln.match(/do.*\|.*\|/))
+            indent += 4
+        elsif(ln.match(/{.*\|.*\|/))
+            indent += 4
+            if(ln.match(/}$/))
+               indent -= 4
+            end
+        elsif(ln.match(/lambda {/))
+            indent += 4
+            if(ln.match(/}/))
+                indent -= 4
+            end
+        elsif(!ln.match(/^}/) && ln.match(/}$/))
+            indent -= 4
+        end
+    end
+    out
+end
+
 #Class to populate the CachedClasses global
 class QmlIrToRuby
 
@@ -131,8 +211,7 @@ class QmlIrToRuby
                    type == :method ||
                    type == :reader ||
                    type == :accessor)
-                    file.print("  ")
-                    file.puts(dat)
+                    file.puts(code_format(dat))
                 elsif(type == :cls_def)
                     #Do nothing else
                 else
@@ -237,6 +316,14 @@ class QmlIrToRuby
         nil
     end
 
+    def norm_id(x)
+        if(/anon/.match(x))
+            x
+        else
+            "@"+x
+        end
+    end
+
     def consume_instruction(inst)
         #puts "consuming #{inst}"
         case inst[0]
@@ -253,14 +340,16 @@ class QmlIrToRuby
                 end
             end
 
+            id = norm_id(id)
+
             if(get_qml_const(cls))
                 cls = "Qml::" + cls
             end
 
             if(@cc_id == 0)
-                @setup += "@#{id} = self\n"
+                @setup += "#{id} = self\n"
             else
-                @setup += "@#{id} = #{cls}.new(database, ui_path+#{@cc_id.to_s.inspect}+'/')\n"
+                @setup += "#{id} = #{cls}.new(database, ui_path+#{@cc_id.to_s.inspect}+'/')\n"
             end
             @cc_id += 1
         when AA
@@ -333,13 +422,14 @@ class QmlIrToRuby
         #Identify context fields
         off = 0
         ir.each do |inst|
-            if(inst.type == CC && inst.length == 4)# && inst[3] != "anonymous")
+            if(inst.type == CC && inst.length == 4)
                 if(off == 0)
                     ctx[inst[3]] = "self"
                     @context[off] = "self"
                 else
-                    ctx[inst[3]] = "@"+inst[3]
-                    @context[off] = "@"+inst[3]
+                    id = norm_id(inst[3])
+                    ctx[inst[3]]  = id
+                    @context[off] = id
                 end
                 keys << inst[3]
                 off += 1
@@ -522,13 +612,14 @@ end"
     #Create class method
     def install_method(meth)
         (name, args, code) = meth[2..4]
-        @cache_load << [:method, @class, "def #{name}(#{args});#{code};end"]
+        @cache_load << [:method, @class, "def #{name}(#{args})\n#{code}\nend"]
         eval("class Qml::#{@class}\n def #{name}(#{args});#{code};end\n end", nil, meth.file, meth.line)
     end
 
     def indirect_method(meth, cls)
         (name, args, code) = meth[2..4]
         code = code.inspect[1..-2]
+        code = code_compact(code)
         @init += "
         #{@context[cls]}.instance_eval(\"def #{name}(#{args});#{code};end\", #{meth.file.inspect}, #{meth.line})\n"
         #@init += "print '%'\n"
@@ -591,7 +682,9 @@ end"
                 sum += 1 if use[i][j]
             end
 
-            @init += "Qml::context_apply(context, @#{k})\n" if sum != 0
+            id = norm_id(k)
+
+            @init += "Qml::context_apply(context, #{id})\n" if sum != 0
         end
     end
 
