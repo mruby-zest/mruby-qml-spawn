@@ -213,6 +213,10 @@ class QmlIrToRuby
         #puts "Done with #{@class}"
         #puts "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 
+        if($damaged_classes.include?(@class))
+            $damaged_classes.delete(@class)
+        end
+
         #Pop state off stack
         @cc_id = oldcc
         @class = old
