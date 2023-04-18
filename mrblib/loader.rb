@@ -26,6 +26,8 @@ def loadIR(search=nil)
     different_file = false
     qml_data.each do |q|
         cname = q.gsub(".qml","").gsub(/.*\//, "")
+        # Ignore files starting with a dot (hidden files on Linux)
+        next if cname.start_with?('.')
         hash = File::Stat.new(q).ctime.to_s
         #hash  = `md5sum #{q}`
         q_ir = nil
